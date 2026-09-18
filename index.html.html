@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presensi Siswa - Face ID Real-Time</title>
+    
+    <!-- Pustaka face-api.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+    
+    <!-- Pustaka Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        
+        body { 
+            position: relative;
+            min-height: 100vh;
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            padding: 20px; 
+            overflow-x: hidden;
+            background-color: #000;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: url('WhatsApp Image 2026-09-07 at 16.24.23.jpeg');
+            background-size: cover;
+            background-position: center;
+            filter: blur(14px) brightness(0.9);
+            transform: scale(1.1);
+            z-index: -1;
+        }
+
+        .top-left-header {
+            position: fixed;
+            top: 20px;
+            left: 25px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .logo-box {
+            width: 75px;
+            height: 75px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        }
+
+        .logo-x {
+            font-size: 22px;
+            font-weight: 900;
+            color: #1a1d20;
+            user-select: none;
+        }
+
+        .app-container { 
+            width: 100%; 
+            max-width: 420px; 
+            background: rgba(255, 255, 255, 0.92); 
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 2px solid rgba(255, 255, 255, 0.8); 
+            border-radius: 28px; 
+            padding: 28px 24px; 
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25); 
+            position: relative;
+            z-index: 1;
+            margin-top: 40px;
+        }
+        
+        .landing-view { text-align: center; }
+        .banner-img { 
+            width: 100%; 
+            max-width: 250px; 
+            height: auto; 
+            border-radius: 20px; 
+            margin-bottom: 16px; 
+            object-fit: cover; 
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18); 
+            border: 4px solid #ffffff;
+            transition: transform 0.3s ease;
+        }
+        .banner-img:hover { transform: scale(1.03); }
+        
+        .landing-title { font-size: 22px; font-weight: 800; color: #0d3b66; margin-bottom: 6px; }
+        .landing-subtitle { font-size: 13px; color: #4a6572; margin-bottom: 20px; line-height: 1.5; font-weight: 500; }
+        
+        .info-box { 
+            background-color: rgba(240, 247, 255, 0.85); 
+            border: 1.5px dashed #0099ff; 
+            border-radius: 16px; 
+            padding: 14px; 
+            margin-bottom: 20px; 
+            text-align: left; 
+            font-size: 12px; 
+            color: #1e3a5f; 
+        }
+        .info-box ul { padding-left: 18px; margin-top: 6px; }
+        .info-box li { margin-bottom: 4px; }
+
+        .scanner-view { display: none; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { font-size: 20px; font-weight: 700; color: #0d3b66; }
+        .header p { font-size: 13px; color: #6c757d; margin-top: 4px; }
+        .field-group { margin-bottom: 14px; }
+        label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 6px; }
+        select { width: 100%; padding: 10px 12px; font-size: 13px; color: #1a1d20; background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; outline: none; }
+        .date-group { display: flex; gap: 6px; }
+        
+        .camera-wrapper { position: relative; width: 100%; height: 230px; background-color: #0f172a; border-radius: 16px; overflow: hidden; margin-bottom: 16px; border: 2px solid #e2e8f0; }
+        
+        video, canvas#overlay { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
+            -webkit-transform: scaleX(-1);
+            transform: scaleX(-1); 
+        }
+
+        video { display: none; }
+
+        canvas#overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        
+        .camera-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #94a3b8; gap: 8px; font-size: 13px; }
+        .action-group { display: flex; gap: 10px; margin-bottom: 14px; }
+        .btn { flex: 1; padding: 12px; font-size: 13px; font-weight: 700; border-radius: 12px; border: none; cursor: pointer; transition: all 0.2s ease; }
+        
+        .btn-primary { background: linear-gradient(135deg, #0088ff 0%, #00c6ff 100%); color: #ffffff; width: 100%; padding: 14px; font-size: 14px; box-shadow: 0 6px 16px rgba(0, 136, 255, 0.35); }
+        .btn-primary:hover { opacity: 0.95; transform: translateY(-1px); }
+        .btn-outline { background-color: #f1f5f9; border: 1px solid #cbd5e1; color: #334155; }
+        .btn-success { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: #ffffff; box-shadow: 0 4px 12px rgba(56, 239, 125, 0.25); }
+        .btn-secondary { background-color: #64748b; color: #ffffff; width: 100%; margin-top: 10px; }
+        
+        .status-badge { text-align: center; padding: 10px; font-size: 12px; font-weight: 600; border-radius: 10px; background-color: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; transition: all 0.3s ease; }
+        .watermark { text-align: center; font-size: 11px; font-weight: 600; color: #495057; margin-top: 20px; letter-spacing: 0.5px; }
+
+        @media (max-width: 600px) {
+            .top-left-header { position: absolute; top: 15px; left: 15px; }
+            .logo-box { width: 50px; height: 50px; }
+            .logo-x { font-size: 16px; }
+            .app-container { margin-top: 80px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="top-left-header">
+    <img src="R.png" alt="Logo SMKN 2 Palembang" class="logo-box">
+    <span class="logo-x">X</span>
+    <img src="WhatsApp Image 2026-09-07 at 16.24.23.jpeg" alt="Logo Kelas" class="logo-box">
+</div>
+
+<div class="app-container">
+    <div id="landingView" class="landing-view">
+        <img src="WhatsApp Image 2026-09-07 at 16.24.23.jpeg" alt="Class X TKJ 6" class="banner-img">
+
+        <h1 class="landing-title">Sistem Absensi Digital</h1>
+        <p class="landing-subtitle">Presensi Kehadiran Siswa Real-Time Berbasis Face ID (Kelas X TKJ 6)</p>
+
+        <div class="info-box">
+            <strong>Petunjuk Absensi:</strong>
+            <ul>
+                <li>Izinkan akses kamera di browser Anda.</li>
+                <li>Daftarkan nama & wajah jika baru pertama kali.</li>
+                <li>Posisikan wajah tepat di depan kamera untuk absen.</li>
+            </ul>
+        </div>
+
+        <button class="btn btn-primary" onclick="masukKeScanner()">Masuk ke Scanner Face ID</button>
+    </div>
+
+    <div id="scannerView" class="scanner-view">
+        <header class="header">
+            <h1>Presensi Siswa</h1>
+            <p>Kelas X TKJ 6 — Face ID</p>
+        </header>
+
+        <main>
+            <div class="field-group">
+                <label for="rombel">Rombel Anda</label>
+                <select id="rombel">
+                    <option value="X TKJ 6" selected>X TKJ 6</option>
+                </select>
+            </div>
+
+            <div class="field-group">
+                <label>Tanggal Absen</label>
+                <div class="date-group">
+                    <select id="tglAbsen" style="flex: 0.8;"></select>
+                    <select id="blnAbsen" style="flex: 1.2;">
+                        <option value="0">Januari</option>
+                        <option value="1">Februari</option>
+                        <option value="2">Maret</option>
+                        <option value="3">April</option>
+                        <option value="4">Mei</option>
+                        <option value="5">Juni</option>
+                        <option value="6">Juli</option>
+                        <option value="7">Agustus</option>
+                        <option value="8">September</option>
+                        <option value="9">Oktober</option>
+                        <option value="10">November</option>
+                        <option value="11">Desember</option>
+                    </select>
+                    <select id="thnAbsen" style="flex: 1;">
+                        <option value="2026">2026</option>
+                        <option value="2027">2027</option>
+                        <option value="2028">2028</option>
+                        <option value="2029">2029</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="camera-wrapper">
+                <video id="video" autoplay playsinline muted></video>
+                <canvas id="overlay"></canvas>
+                <div id="cameraPlaceholder" class="camera-placeholder">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                        <circle cx="12" cy="13" r="4"></circle>
+                    </svg>
+                    <span>Kamera Belum Aktif</span>
+                </div>
+            </div>
+
+            <canvas id="captureCanvas" style="display: none;"></canvas>
+
+            <div class="action-group">
+                <button class="btn btn-outline" id="btnKamera" onclick="bukaKamera()">Aktifkan Kamera</button>
+                <button class="btn btn-success" onclick="daftarWajahSiswa()">Daftarkan Wajah</button>
+            </div>
+
+            <div class="status-badge" id="status">Status: Memuat Model AI & Database...</div>
+            <button class="btn btn-secondary" onclick="kembaliKeLanding()">Kembali ke Halaman Awal</button>
+        </main>
+    </div>
+
+    <div class="watermark">ig : @zxcky0 X @hey.javv</div>
+</div>
+
+<script>
+    // --- KONFIGURASI FIREBASE (GANTI DENGAN KODE MILIKMU) ---
+    const firebaseConfig = {
+        apiKey: "PASTE_API_KEY_KAMU_DI_SINI",
+        authDomain: "PASTE_PROJECT_ID.firebaseapp.com",
+        databaseURL: "https://PASTE_PROJECT_ID-default-rtdb.firebaseio.com",
+        projectId: "PASTE_PROJECT_ID",
+        storageBucket: "PASTE_PROJECT_ID.appspot.com",
+        messagingSenderId: "1234567890",
+        appId: "1:1234567890:web:abcdef123456"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const landingView = document.getElementById('landingView');
+    const scannerView = document.getElementById('scannerView');
+    const video = document.getElementById('video');
+    const overlay = document.getElementById('overlay');
+    const cameraPlaceholder = document.getElementById('cameraPlaceholder');
+    const statusText = document.getElementById('status');
+    const captureCanvas = document.getElementById('captureCanvas');
+
+    let faceMatcher = null;
+    let registeredFaceDescriptors = [];
+    let isDetectionRunning = false;
+    let lastAbsenTime = 0;
+    let statusTimeout = null;
+    let cacheAbsensiCloud = [];
+
+    function masukKeScanner() {
+        landingView.style.display = 'none';
+        scannerView.style.display = 'block';
+    }
+
+    function kembaliKeLanding() {
+        scannerView.style.display = 'none';
+        landingView.style.display = 'block';
+    }
+
+    function inisialisasiTanggal() {
+        const selectTgl = document.getElementById('tglAbsen');
+        selectTgl.innerHTML = '';
+        for (let i = 1; i <= 31; i++) {
+            let opt = document.createElement('option');
+            opt.value = i;
+            opt.innerHTML = i < 10 ? '0' + i : i;
+            selectTgl.appendChild(opt);
+        }
+
+        const skrg = new Date();
+        selectTgl.value = skrg.getDate();
+        document.getElementById('blnAbsen').value = skrg.getMonth();
+        document.getElementById('thnAbsen').value = skrg.getFullYear().toString();
+    }
+
+    inisialisasiTanggal();
+
+    window.addEventListener("load", async () => {
+        await inisialisasiFaceApi();
+    });
+
+    async function inisialisasiFaceApi() {
+        try {
+            const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+            
+            statusText.innerText = "Mengunduh Model AI...";
+            await Promise.all([
+                faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+                faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+            ]);
+
+            muatDatabaseWajahCloud();
+            pantauDatabaseAbsensiCloud();
+        } catch (err) {
+            console.error(err);
+            statusText.innerText = "Gagal mengunduh model Face ID";
+            statusText.style.backgroundColor = "#fff5f5";
+            statusText.style.color = "#e03131";
+        }
+    }
+
+    // Membaca data wajah dari Firebase secara Real-time
+    function muatDatabaseWajahCloud() {
+        db.ref('databaseWajahSiswa').on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const parsedList = Object.values(data);
+                registeredFaceDescriptors = parsedList.map(item => {
+                    const FloatArray = new Float32Array(Object.values(item.descriptor));
+                    return new faceapi.LabeledFaceDescriptors(item.nama, [FloatArray]);
+                });
+
+                if (registeredFaceDescriptors.length > 0) {
+                    faceMatcher = new faceapi.FaceMatcher(registeredFaceDescriptors, 0.65);
+                    statusText.innerText = `Siap! (${registeredFaceDescriptors.length} Siswa Terdaftar Cloud)`;
+                    statusText.style.backgroundColor = "#e7f5ff";
+                    statusText.style.color = "#1c7ed6";
+                    statusText.style.borderColor = "#a5d8ff";
+                    return;
+                }
+            }
+            
+            statusText.innerText = "Aktifkan kamera & Daftarkan Wajah";
+            statusText.style.backgroundColor = "#fff9db";
+            statusText.style.color = "#f59f00";
+            statusText.style.borderColor = "#ffec99";
+        });
+    }
+
+    // Sinkronisasi data absensi real-time untuk validasi sudah absen atau belum
+    function pantauDatabaseAbsensiCloud() {
+        db.ref('databaseAbsensi').on('value', (snapshot) => {
+            const data = snapshot.val();
+            cacheAbsensiCloud = data ? Object.values(data) : [];
+        });
+    }
+
+    async function bukaKamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" } 
+            });
+            
+            video.srcObject = stream;
+            video.style.display = "block";
+            cameraPlaceholder.style.display = "none";
+            
+            video.onloadedmetadata = () => {
+                video.play();
+                if (!isDetectionRunning) {
+                    isDetectionRunning = true;
+                    mulaiScannerRealtime();
+                }
+            };
+        } catch (err) {
+            alert("Kamera tidak dapat diakses!");
+        }
+    }
+
+    async function daftarWajahSiswa() {
+        if (!video.srcObject || video.paused) {
+            alert("Aktifkan kamera terlebih dahulu!");
+            return;
+        }
+
+        const nama = prompt("Masukkan Nama Lengkap Siswa:");
+        if (!nama) return;
+
+        statusText.innerText = "Merekam Fitur Wajah...";
+
+        const detection = await faceapi.detectSingleFace(video)
+            .withFaceLandmarks()
+            .withFaceDescriptor();
+
+        if (!detection) {
+            alert("Wajah tidak terdeteksi. Pastikan pencahayaan cukup!");
+            muatDatabaseWajahCloud();
+            return;
+        }
+
+        // Simpan pendaftaran wajah baru langsung ke Firebase
+        db.ref('databaseWajahSiswa').push({
+            nama: nama,
+            descriptor: Array.from(detection.descriptor)
+        }, (error) => {
+            if (error) {
+                alert("Gagal menyimpan ke cloud: " + error.message);
+            } else {
+                alert(`Berhasil mendaftarkan wajah ke Cloud: ${nama}`);
+            }
+        });
+    }
+
+    function mulaiScannerRealtime() {
+        const displaySize = { width: video.clientWidth || 320, height: video.clientHeight || 230 };
+        faceapi.matchDimensions(overlay, displaySize);
+
+        setInterval(async () => {
+            if (!isDetectionRunning || video.paused || video.ended) return;
+
+            const detections = await faceapi.detectAllFaces(video)
+                .withFaceLandmarks()
+                .withFaceDescriptors();
+
+            const resizedDetections = faceapi.resizeResults(detections, displaySize);
+            
+            const ctx = overlay.getContext('2d');
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+            resizedDetections.forEach(detection => {
+                let labelText = "Tidak Dikenal";
+
+                if (faceMatcher) {
+                    const match = faceMatcher.findBestMatch(detection.descriptor);
+                    if (match.label !== "unknown") {
+                        labelText = match.label;
+                        prosesAbsenOtomatis(match.label);
+                    }
+                }
+
+                const box = detection.detection.box;
+                const color = labelText !== "Tidak Dikenal" ? "#2b8a3e" : "#e03131";
+
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.strokeRect(box.x, box.y, box.width, box.height);
+
+                ctx.save();
+                ctx.scale(-1, 1);
+                ctx.font = "14px Arial";
+                
+                const textWidth = ctx.measureText(labelText).width + 10;
+                const textX = -(box.x + box.width);
+                const textY = box.y > 22 ? box.y - 5 : box.y + 15;
+
+                ctx.fillStyle = color;
+                ctx.fillRect(textX, textY - 14, textWidth, 18);
+
+                ctx.fillStyle = "#ffffff";
+                ctx.fillText(labelText, textX + 5, textY);
+                ctx.restore();
+            });
+        }, 200);
+    }
+
+    function ambilFoto() {
+        const context = captureCanvas.getContext('2d');
+        captureCanvas.width = 640;
+        captureCanvas.height = 640;
+        
+        context.translate(captureCanvas.width, 0);
+        context.scale(-1, 1);
+        
+        const startX = (video.videoWidth - video.videoHeight) / 2;
+        context.drawImage(video, startX, 0, video.videoHeight, video.videoHeight, 0, 0, 640, 640);
+        
+        return captureCanvas.toDataURL('image/jpeg', 0.85);
+    }
+
+    function prosesAbsenOtomatis(namaSiswa) {
+        const now = Date.now();
+        if (now - lastAbsenTime < 3000) return; 
+        lastAbsenTime = now;
+
+        const rombel = document.getElementById('rombel').value;
+        const tgl = parseInt(document.getElementById('tglAbsen').value);
+        const bln = parseInt(document.getElementById('blnAbsen').value);
+        const thn = document.getElementById('thnAbsen').value;
+        
+        const listBulan = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agus", "Sep", "Okt", "Nov", "Des"];
+        const tanggalFullStr = `${tgl} ${listBulan[bln]} ${thn}`;
+        const waktuJam = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+        const sudahAbsenHariIni = cacheAbsensiCloud.some(item => 
+            item.nama === namaSiswa && item.tanggalFull === tanggalFullStr
+        );
+
+        if (statusTimeout) clearTimeout(statusTimeout);
+
+        if (sudahAbsenHariIni) {
+            statusText.innerText = `ANDA SUDAH MELAKUKAN ABSEN! (${namaSiswa})`;
+            statusText.style.backgroundColor = "#ffe3e3";
+            statusText.style.color = "#d92626";
+            statusText.style.borderColor = "#f87171";
+        } else {
+            const fotoSiswa = ambilFoto();
+            const dataBaru = {
+                nama: namaSiswa,
+                kelas: rombel,
+                waktu: waktuJam,
+                tanggal: tgl,
+                bulanIndex: bln,
+                tahun: thn,
+                tanggalFull: tanggalFullStr,
+                foto: fotoSiswa
+            };
+
+            // Kirim rekaman absensi ke Firebase Cloud
+            db.ref('databaseAbsensi').push(dataBaru);
+
+            statusText.innerText = `Anda sudah absen (${namaSiswa})`;
+            statusText.style.backgroundColor = "#ebfbee";
+            statusText.style.color = "#2b8a3e";
+            statusText.style.borderColor = "#51cf66";
+        }
+
+        statusTimeout = setTimeout(() => {
+            statusText.innerText = `Siap! (${registeredFaceDescriptors.length} Siswa Terdaftar Cloud)`;
+            statusText.style.backgroundColor = "#e7f5ff";
+            statusText.style.color = "#1c7ed6";
+            statusText.style.borderColor = "#a5d8ff";
+        }, 4000);
+    }
+</script>
+</body>
+</html>
