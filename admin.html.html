@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Admin - Presensi Siswa</title>
+
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { position: relative; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; overflow-x: hidden; background-color: #000; }
+        body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-image: url('WhatsApp Image 2026-09-07 at 16.24.23.jpeg'); background-size: cover; background-position: center; filter: blur(14px) brightness(0.9); transform: scale(1.1); z-index: -1; }
+        .top-left-header { position: fixed; top: 20px; left: 25px; display: flex; align-items: center; gap: 12px; z-index: 10; }
+        .logo-box { width: 75px; height: 75px; border-radius: 50%; object-fit: cover; background: #fff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25); }
+        .logo-x { font-size: 22px; font-weight: 900; color: #1a1d20; user-select: none; }
+        .admin-container { width: 100%; max-width: 980px; background: rgba(255, 255, 255, 0.92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 2px solid rgba(255, 255, 255, 0.8); border-radius: 28px; padding: 28px 24px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25); position: relative; z-index: 1; margin-top: 50px; }
+        .admin-header { text-align: center; margin-bottom: 20px; }
+        .admin-header h1 { font-size: 22px; font-weight: 800; color: #0d3b66; }
+        .filter-panel { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; background: rgba(240, 247, 255, 0.85); padding: 14px; border-radius: 16px; border: 1.5px dashed #0099ff; align-items: center; justify-content: space-between; }
+        .filter-group { flex: 1; min-width: 200px; }
+        label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 4px; }
+        input { width: 100%; padding: 9px 12px; font-size: 13px; color: #1a1d20; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px; outline: none; }
+        .btn-group { display: flex; gap: 8px; }
+        .btn { padding: 8px 12px; font-size: 12px; font-weight: 700; border-radius: 10px; border: none; cursor: pointer; transition: all 0.2s ease; text-decoration: none; display: inline-block; }
+        .btn-refresh { background-color: #0088ff; color: #fff; }
+        .btn-danger { background-color: #e03131; color: #fff; }
+        .btn-print { background-color: #12b886; color: #fff; }
+        .btn-del-item { background-color: #ff6b6b; color: #fff; padding: 5px 8px; font-size: 11px; }
+        .table-responsive { max-height: 420px; overflow-y: auto; border-radius: 12px; border: 1px solid #e2e8f0; background: #ffffff; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+        th { background-color: #f1f5f9; color: #475569; font-weight: 700; padding: 12px; position: sticky; top: 0; border-bottom: 2px solid #cbd5e1; }
+        td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; color: #334155; vertical-align: middle; }
+        .img-thumb { width: 45px; height: 45px; border-radius: 8px; object-fit: cover; cursor: pointer; border: 1px solid #ccc; transition: transform 0.2s; }
+        .img-thumb:hover { transform: scale(1.08); }
+        .badge-success { background-color: #ebfbee; color: #2b8a3e; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+        .watermark { text-align: center; font-size: 11px; font-weight: 600; color: #495057; margin-top: 20px; letter-spacing: 0.5px; }
+
+        /* Modal Popup Foto Lengkap HD */
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.85); justify-content: center; align-items: center; flex-direction: column; gap: 15px; }
+        .modal-content { max-width: 85%; max-height: 75vh; border-radius: 12px; box-shadow: 0 4px 20px rgba(255,255,255,0.2); border: 2px solid #ffffff; }
+        .close-modal { position: absolute; top: 20px; right: 30px; color: #fff; font-size: 35px; font-weight: bold; cursor: pointer; }
+        .btn-download-modal { background-color: #1098ad; color: #fff; padding: 10px 20px; font-size: 14px; font-weight: 700; border-radius: 10px; text-decoration: none; box-shadow: 0 4px 12px rgba(16, 152, 173, 0.4); }
+        .btn-download-modal:hover { background-color: #0c8599; }
+    </style>
+</head>
+<body>
+
+<div class="top-left-header">
+    <img src="R.png" alt="Logo SMKN 2 Palembang" class="logo-box">
+    <span class="logo-x">X</span>
+    <img src="WhatsApp Image 2026-09-07 at 16.24.23.jpeg" alt="Logo Kelas" class="logo-box">
+</div>
+
+<div class="admin-container">
+    <header class="admin-header">
+        <h1>Panel Admin Presensi</h1>
+        <p>Rekapitulasi Kehadiran Real-Time (Kelas X TKJ 6)</p>
+    </header>
+
+    <div class="filter-panel">
+        <div class="filter-group">
+            <label>Cari Nama Siswa</label>
+            <input type="text" id="filterNama" placeholder="Cari nama..." onkeyup="tampilkanDataAbsensi()">
+        </div>
+
+        <div class="btn-group">
+            <button class="btn btn-refresh" onclick="muatDataRealtime()">↻ Refresh</button>
+            <button class="btn btn-print" onclick="window.print()">Cetak</button>
+            <button class="btn btn-danger" onclick="hapusSemuaData()">Reset Semua</button>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>No</th>
+                    <th>Foto HD</th>
+                    <th>Nama Siswa</th>
+                    <th>Kelas</th>
+                    <th>Tanggal Absen</th>
+                    <th>Waktu</th>
+                    <th>Status</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="tabelAbsensiBody">
+            </tbody>
+        </table>
+    </div>
+
+    <div class="watermark">ig : @zxcky0 X @hey.javv</div>
+</div>
+
+<!-- Modal Popup Foto HD + Tombol Unduh Foto -->
+<div id="imageModal" class="modal" onclick="if(event.target === this) tutupModal()">
+    <span class="close-modal" onclick="tutupModal()">&times;</span>
+    <img class="modal-content" id="imgFull">
+    <a id="downloadBtnModal" href="#" download="" class="btn-download-modal">📥 Unduh Foto HD</a>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyC9zh958ruIe6YqM4lCrqt3j89hWo0lQwM",
+        authDomain: "presensi-cendekiawan.firebaseapp.com",
+        databaseURL: "https://presensi-cendekiawan-default-rtdb.firebaseio.com",
+        projectId: "presensi-cendekiawan",
+        storageBucket: "presensi-cendekiawan.firebasestorage.app",
+        messagingSenderId: "161839339280",
+        appId: "1:161839339280:web:d584d14e81fe64bf57f795",
+        measurementId: "G-R4NFGWZKS0"
+    };
+
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
+
+    let listDataAbsensi = [];
+
+    function muatDataRealtime() {
+        db.collection("databaseAbsensi").onSnapshot((snapshot) => {
+            listDataAbsensi = [];
+            snapshot.forEach((doc) => {
+                listDataAbsensi.push({ id: doc.id, ...doc.data() });
+            });
+            tampilkanDataAbsensi();
+        }, (err) => {
+            console.error("Error Muat Data Admin:", err);
+        });
+    }
+
+    function tampilkanDataAbsensi() {
+        const tbody = document.getElementById('tabelAbsensiBody');
+        const filterNama = document.getElementById('filterNama').value.toLowerCase();
+
+        tbody.innerHTML = '';
+
+        const filteredData = listDataAbsensi.filter(item => {
+            return item.nama ? item.nama.toLowerCase().includes(filterNama) : true;
+        });
+
+        if (filteredData.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 20px;">Belum ada data absensi masuk</td></tr>`;
+            return;
+        }
+
+        filteredData.forEach((item, index) => {
+            const tr = document.createElement('tr');
+            
+            let jamTampil = item.waktu || '-';
+            if (item.timestamp && item.timestamp.toDate) {
+                const dateObj = item.timestamp.toDate();
+                jamTampil = dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            }
+
+            const fotoSrc = item.foto || 'https://via.placeholder.com/45?text=No+Img';
+            const namaFile = `Absen_${(item.nama || 'Siswa').replace(/\s+/g, '_')}_${item.tanggalFull || 'HariIni'}.jpg`;
+
+            tr.innerHTML = `
+                <td>${index + 1}</td>
+                <td>
+                    <img src="${fotoSrc}" class="img-thumb" onclick="lihatFoto('${fotoSrc}', '${namaFile}')" alt="Foto Siswa" title="Klik untuk memperbesar & unduh">
+                </td>
+                <td><strong>${item.nama}</strong></td>
+                <td>${item.kelas || 'X TKJ 6'}</td>
+                <td>${item.tanggalFull || '-'}</td>
+                <td>${jamTampil} WIB</td>
+                <td><span class="badge-success">Hadir</span></td>
+                <td>
+                    <button class="btn btn-del-item" onclick="hapusSatuData('${item.id}', '${item.nama}')">Hapus</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function lihatFoto(src, fileName) {
+        const modal = document.getElementById('imageModal');
+        const imgFull = document.getElementById('imgFull');
+        const downloadBtn = document.getElementById('downloadBtnModal');
+
+        imgFull.src = src;
+        downloadBtn.href = src;
+        downloadBtn.download = fileName;
+        
+        modal.style.display = 'flex';
+    }
+
+    function tutupModal() {
+        document.getElementById('imageModal').style.display = 'none';
+    }
+
+    async function hapusSatuData(id, nama) {
+        if (confirm(`Hapus riwayat presensi milik ${nama}?`)) {
+            try {
+                await db.collection("databaseAbsensi").doc(id).delete();
+            } catch (error) {
+                alert("Gagal menghapus data: " + error.message);
+            }
+        }
+    }
+
+    async function hapusSemuaData() {
+        if (confirm("Apakah Anda yakin ingin menghapus SELURUH rekaman absensi?")) {
+            const snapshot = await db.collection("databaseAbsensi").get();
+            const batch = db.batch();
+            snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+            await batch.commit();
+        }
+    }
+
+    window.addEventListener('load', muatDataRealtime);
+</script>
+
+</body>
+</html>
